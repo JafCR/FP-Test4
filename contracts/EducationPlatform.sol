@@ -26,9 +26,12 @@ contract EducationPlatform is Ownable {
         string phoneNumber;
         bool open;
         uint memberIdGenerator;
+        uint courseIdGenerator;
         mapping (address => UniversityMember) owners;
         mapping (address => UniversityMember) teachers;
         mapping (address => UniversityMember) students;
+
+        mapping (uint => Course) courses; //Mappint to track all classes available for this University
     }
 
     struct UniversityMember {
@@ -38,9 +41,19 @@ contract EducationPlatform is Ownable {
         bool active;
     }
 
+    struct Course {
+        string courseName;
+        uint cost;
+        bool active;
+        uint activeStudents;
+        uint seatsAvailable; //to simulate a student buying multiple seats for a course
+        mapping (uint => address) students; //Keeps a list of enrolled students in case we need to send a bulk msg.
+    }
+
 
     // Events
     event LogUniversityAdded(string name, string desc, uint universityId);
+    event LogCourseAdded(string _courseName, uint cost, uint _seatsAvailable, uint courseId);
 
     // Modifiers
     modifier validAddress(address _address) {
@@ -48,9 +61,14 @@ contract EducationPlatform is Ownable {
         _;
     }
 
-    modifier ownerAtUniversity(uint universityId) {
-        require((universities[universityId].owners[msg.sender].active == true), "DOES NOT BELONG TO THE UNIVERSITY OWNERS OR IS INACTIVE");
+    modifier ownerAtUniversity(uint _universityId) {
+        require((universities[_universityId].owners[msg.sender].active == true), "DOES NOT BELONG TO THE UNIVERSITY OWNERS OR IS INACTIVE");
         require(universityOwners.has(msg.sender), "DOES NOT HAVE UNIVERSITY OWNER ROLE");
+        _;
+    }
+
+    modifier courseIsActive(uint _universityId, uint _courseId) {
+        require((universities[_universityId].courses[_courseId].active == true), "COURSE IS INACTIVE - CONTACT UNIVERSITY OWNER");
         _;
     }
 
@@ -69,6 +87,42 @@ contract EducationPlatform is Ownable {
 
         emit LogUniversityAdded(_name, _description, universityIdGenerator);
     }
+
+    // Add a Course
+    function addCourse(uint _universityId, string memory _courseName, uint _cost, uint _seatsAvailable) public
+    ownerAtUniversity(_universityId)
+    returns (bool)
+    {
+        Course memory newCourse;
+        newCourse.courseName = _courseName;
+        newCourse.seatsAvailable = _seatsAvailable;
+        newCourse.cost = _cost;
+        newCourse.active = true;
+        newCourse.activeStudents = 0;
+
+        uint courseId = universities[_universityId].courseIdGenerator;
+        universities[_universityId].courses[courseId] = newCourse;
+        universities[_universityId].courseIdGenerator += 1;
+
+        emit LogCourseAdded(_courseName, _cost, _seatsAvailable, courseId);
+        return true;
+    }
+
+    // Modify a Course
+    function updateCourse(uint _universityId, uint _courseId, string memory _courseName, uint _cost, uint _seatsAvailable, bool _isActive)
+    public
+    ownerAtUniversity(_universityId)
+    returns (bool)
+    {
+        Course memory newCourse;
+        newCourse.courseName = _courseName;
+        newCourse.seatsAvailable = _seatsAvailable;
+        newCourse.cost = _cost;
+        newCourse.active = _isActive;
+        universities[_universityId].courses[_courseId] = newCourse;
+        return true;
+    }
+
 
     // Get University details
     function getUniversity(uint _uniId)
@@ -94,6 +148,7 @@ contract EducationPlatform is Ownable {
         UniversityMember memory newUniversityMember;
         newUniversityMember.fullName = _fullName;
         newUniversityMember.email = _email;
+        newUniversityMember.active = true;
         newUniversityMember.id = universities[universityId].memberIdGenerator;
         universities[universityId].owners[_ownerAddr] = newUniversityMember;
 
