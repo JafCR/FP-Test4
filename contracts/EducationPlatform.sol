@@ -17,7 +17,9 @@ contract EducationPlatform is Ownable {
     Roles.Role students; // Stores student Roles;
 
     uint public universityIdGenerator;
+    uint UserIdGenerator;
     mapping (uint => University) public universities; // Mapping to keep track of the Universities
+    mapping (address => PlatformMember) platformUsers; // Mapping to keep track of the Students in the platform
 
     struct University {
         string name;
@@ -27,11 +29,20 @@ contract EducationPlatform is Ownable {
         bool open;
         uint memberIdGenerator;
         uint courseIdGenerator;
+        address Universityowner;
         mapping (address => UniversityMember) owners;
         mapping (address => UniversityMember) teachers;
         mapping (address => UniversityMember) students;
 
         mapping (uint => Course) courses; //Mappint to track all classes available for this University
+    }
+
+    // This structs is to store the information of a Platform member. Has a flag to identify if the member is Owner or not.
+    struct PlatformMember {
+        string fullName;
+        string email;
+        uint id;
+        bool isUniversityOwner;
     }
 
     struct UniversityMember {
@@ -58,6 +69,11 @@ contract EducationPlatform is Ownable {
     // Modifiers
     modifier validAddress(address _address) {
         require(_address != address(0), "ADDRESS CANNOT BE THE ZERO ADDRESS");
+        _;
+    }
+
+    modifier isUniversityOwner(address _addr) {
+        require(universityOwners.has(msg.sender), "DOES NOT HAVE UNIVERSITY OWNER ROLE");
         _;
     }
 
@@ -108,6 +124,7 @@ contract EducationPlatform is Ownable {
         return true;
     }
 
+
     // Modify a Course
     function updateCourse(uint _universityId, uint _courseId, string memory _courseName, uint _cost, uint _seatsAvailable, bool _isActive)
     public
@@ -139,6 +156,14 @@ contract EducationPlatform is Ownable {
     Roles and membership
     */
 
+    function setUniversityOwner(address _ownerAddr, uint _universityId)
+    public onlyOwner
+    isUniversityOwner(_ownerAddr)
+    validAddress(_ownerAddr)
+    {
+        universities[_universityId].Universityowner = _ownerAddr;
+    }
+
     function addUniversityOwnerRoles(address _ownerAddr, string memory _fullName, string memory _email, uint universityId)
     public onlyOwner
     validAddress(_ownerAddr)
@@ -153,6 +178,31 @@ contract EducationPlatform is Ownable {
         universities[universityId].owners[_ownerAddr] = newUniversityMember;
 
         universities[universityId].memberIdGenerator += 1;
+    }
+
+
+    // Registers a new user into the Platform - Owner or Student
+    function addPlatformMember(address _addr, string memory _name, string memory _email, bool _isUniversityOwner) public
+    validAddress(_addr)
+    returns (bool)
+    {
+        PlatformMember memory newPlatformMember;
+        newPlatformMember.fullName = _name;
+        newPlatformMember.email = _email;
+        newPlatformMember.id = UserIdGenerator;
+
+        if (_isUniversityOwner) {
+            universityOwners.add(_addr);
+            newPlatformMember.isUniversityOwner = true;
+        }
+        else {
+            students.add(_addr);
+            newPlatformMember.isUniversityOwner = false;
+        }
+
+        platformUsers[_addr] = newPlatformMember;
+        UserIdGenerator += 1;
+        return true;
     }
 
     function addUniversityMember(address _addr, string memory _name, string memory _email, uint _universityId, string memory _memberRole) public
